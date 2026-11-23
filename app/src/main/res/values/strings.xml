@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">Neto Scalper Pro</string>
+    <string name="nav_terminal">Terminal</string>
+    <string name="nav_strategy">Strategy</string>
+    <string name="nav_positions">Positions</string>
+    <string name="nav_broker">Broker</string>
+    <string name="paper_simulation_banner">SAFETY SIMULATION MODE — PAPER EXECUTION</string>
+    <string name="mt5_demo_banner">MT5 DEMO BRIDGE — PRACTICE EXECUTION</string>
+    <string name="mt5_live_banner">MT5 LIVE BRIDGE — REAL CAPITAL AT RISK</string>
+    <string name="oanda_practice_banner">OANDA PRACTICE API — DEMO EXECUTION</string>
+    <string name="oanda_live_banner">OANDA LIVE API — REAL CAPITAL AT RISK</string>
+    <string name="start_bot">Engage Bot</string>
+    <string name="stop_bot">Halt Bot</string>
+    <string name="flatten_all">Flatten All</string>
+    <string name="buy_market">BUY MKT</string>
+    <string name="sell_market">SELL MKT</string>
+</resources>

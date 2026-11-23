@@ -1,0 +1,6 @@
+{
+  "name": "Neto Scalper Pro",
+  "description": "Automated 1-minute Gold (XAU/USD) and Forex scalping bot with MT5 Live/Demo broker bridge (XM Global & any broker), ZAR flip tracking, and 4-position pyramiding.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
