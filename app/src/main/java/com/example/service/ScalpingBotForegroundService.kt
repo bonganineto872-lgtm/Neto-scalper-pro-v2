@@ -46,8 +46,8 @@ class ScalpingBotForegroundService : Service() {
         }
 
         val initialNotification = buildNotification(
-            title = "Neto Scalper Pro • Active on Device",
-            body = "Monitoring 1m XAU/USD & FX feeds + Local API"
+            title = "Neto Master • Gold & BTC Signal Engine",
+            body = "Monitoring live M1–D1 XAU/USD & BTC/USD signals"
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -71,18 +71,18 @@ class ScalpingBotForegroundService : Service() {
         collectorJob = serviceScope.launch {
             combine(
                 repo.marketSnapshot,
-                repo.accountSummary,
+                repo.flipPlan,
                 repo.botRunState,
-                repo.openPositions
-            ) { market, acct, runState, positions ->
+                repo.activeSignals
+            ) { market, flip, runState, signals ->
                 val stateLabel = when (runState) {
-                    BotRunState.IDLE -> "Standby"
-                    BotRunState.SCANNING -> "1m Scanning"
-                    BotRunState.IN_POSITION -> "${positions.size} Pos Open"
-                    BotRunState.CIRCUIT_BREAKER_HALTED -> "Risk Halted"
+                    BotRunState.IDLE -> "Paused"
+                    BotRunState.SCANNING -> "Scanning M1–D1"
+                    BotRunState.CONFIRMING -> "Confirming Signal..."
+                    BotRunState.SIGNAL_ACTIVE -> "${signals.count { it.isLive }} Live Signal"
                 }
-                val title = "Neto Scalper Pro • ${market.pair.displayName} ($stateLabel)"
-                val body = "Eq ${acct.formatMoney(acct.equity)} | Bid ${market.pair.formatPrice(market.quote.bid)} | ${acct.spotFeedSource}"
+                val title = "Neto Master • ${market.pair.shortTitle} ${market.timeframe.label} ($stateLabel)"
+                val body = "Bid ${market.pair.formatPrice(market.quote.bid)} | Flip ${flip.formatMoney(flip.projectedCapital)} | ${flip.spotFeedSource}"
                 title to body
             }.collect { (title, body) ->
                 manager.notify(NOTIFICATION_ID, buildNotification(title, body))
@@ -109,29 +109,19 @@ class ScalpingBotForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, SignalNotificationHelper.ENGINE_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent)
-            .addAction(0, "Stop Keeper", stopIntent)
+            .addAction(0, "Stop Signal Engine", stopIntent)
             .build()
     }
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Neto Scalper Pro Engine",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Keeps the 1m Gold/FX scalper and on-device REST API active on your phone."
-            }
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
+        SignalNotificationHelper.ensureChannels(this)
     }
 
     override fun onDestroy() {

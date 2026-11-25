@@ -10,101 +10,108 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.example.domain.model.ClosedTradeRecord
-import com.example.domain.model.EquityPoint
 import com.example.domain.model.FxPair
+import com.example.domain.model.SignalHistoryRecord
+import com.example.domain.model.SignalStatus
+import com.example.domain.model.Timeframe
 import com.example.domain.model.TradeSide
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-@Entity(tableName = "trade_history")
-data class TradeEntity(
+@Entity(tableName = "signal_history")
+data class SignalHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val signalId: String,
     val pairName: String,
+    val timeframeName: String,
     val sideName: String,
-    val lotSize: Double,
     val entryPrice: Double,
     val exitPrice: Double,
-    val pipsPnl: Double,
-    val realizedPnlZar: Double,
+    val stopLoss: Double,
+    val tp1: Double,
+    val tp2: Double,
+    val tp3: Double,
+    val tp1Pips: Double,
+    val tp2Pips: Double,
+    val tp3Pips: Double,
+    val capturedPips: Double,
+    val maxDrawdownPips: Double,
+    val confidencePercent: Int,
     val strategyName: String,
-    val closeReason: String,
-    val openedAt: Long,
-    val closedAt: Long,
-    val environmentLabel: String
+    val outcomeName: String,
+    val createdAt: Long,
+    val closedAt: Long
 ) {
-    fun toDomain(): ClosedTradeRecord {
-        return ClosedTradeRecord(
+    fun toDomain(): SignalHistoryRecord {
+        return SignalHistoryRecord(
             id = id,
-            pair = FxPair.entries.find { it.name == pairName } ?: FxPair.EUR_USD,
+            signalId = signalId,
+            pair = FxPair.entries.find { it.name == pairName } ?: FxPair.XAU_USD,
+            timeframe = Timeframe.entries.find { it.name == timeframeName } ?: Timeframe.M5,
             side = TradeSide.entries.find { it.name == sideName } ?: TradeSide.BUY,
-            lotSize = lotSize,
             entryPrice = entryPrice,
             exitPrice = exitPrice,
-            pipsPnl = pipsPnl,
-            realizedPnlZar = realizedPnlZar,
+            stopLoss = stopLoss,
+            tp1 = tp1,
+            tp2 = tp2,
+            tp3 = tp3,
+            tp1Pips = tp1Pips,
+            tp2Pips = tp2Pips,
+            tp3Pips = tp3Pips,
+            capturedPips = capturedPips,
+            maxDrawdownPips = maxDrawdownPips,
+            confidencePercent = confidencePercent,
             strategyName = strategyName,
-            closeReason = closeReason,
-            openedAt = openedAt,
-            closedAt = closedAt,
-            environmentLabel = environmentLabel
+            outcome = SignalStatus.entries.find { it.name == outcomeName } ?: SignalStatus.CLOSED,
+            createdAt = createdAt,
+            closedAt = closedAt
         )
     }
 
     companion object {
-        fun fromDomain(record: ClosedTradeRecord): TradeEntity {
-            return TradeEntity(
+        fun fromDomain(record: SignalHistoryRecord): SignalHistoryEntity {
+            return SignalHistoryEntity(
                 id = record.id,
+                signalId = record.signalId,
                 pairName = record.pair.name,
+                timeframeName = record.timeframe.name,
                 sideName = record.side.name,
-                lotSize = record.lotSize,
                 entryPrice = record.entryPrice,
                 exitPrice = record.exitPrice,
-                pipsPnl = record.pipsPnl,
-                realizedPnlZar = record.realizedPnlZar,
+                stopLoss = record.stopLoss,
+                tp1 = record.tp1,
+                tp2 = record.tp2,
+                tp3 = record.tp3,
+                tp1Pips = record.tp1Pips,
+                tp2Pips = record.tp2Pips,
+                tp3Pips = record.tp3Pips,
+                capturedPips = record.capturedPips,
+                maxDrawdownPips = record.maxDrawdownPips,
+                confidencePercent = record.confidencePercent,
                 strategyName = record.strategyName,
-                closeReason = record.closeReason,
-                openedAt = record.openedAt,
-                closedAt = record.closedAt,
-                environmentLabel = record.environmentLabel
+                outcomeName = record.outcome.name,
+                createdAt = record.createdAt,
+                closedAt = record.closedAt
             )
         }
     }
 }
 
-@Entity(tableName = "equity_snapshots")
-data class EquitySnapshotEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val timestamp: Long,
-    val equity: Double
-) {
-    fun toDomain(): EquityPoint = EquityPoint(timestamp = timestamp, equity = equity)
-}
-
 @Dao
 interface BotDao {
-    @Query("SELECT * FROM trade_history ORDER BY closedAt DESC LIMIT 150")
-    fun observeTradeHistory(): Flow<List<TradeEntity>>
+    @Query("SELECT * FROM signal_history ORDER BY closedAt DESC LIMIT 150")
+    fun observeSignalHistory(): Flow<List<SignalHistoryEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTrade(trade: TradeEntity)
+    suspend fun insertSignalHistory(record: SignalHistoryEntity)
 
-    @Query("DELETE FROM trade_history")
-    suspend fun clearTradeHistory()
-
-    @Query("SELECT * FROM equity_snapshots ORDER BY timestamp ASC LIMIT 200")
-    fun observeEquityCurve(): Flow<List<EquitySnapshotEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertEquitySnapshot(snapshot: EquitySnapshotEntity)
-
-    @Query("DELETE FROM equity_snapshots")
-    suspend fun clearEquitySnapshots()
+    @Query("DELETE FROM signal_history")
+    suspend fun clearSignalHistory()
 }
 
 @Database(
-    entities = [TradeEntity::class, EquitySnapshotEntity::class],
-    version = 2,
+    entities = [SignalHistoryEntity::class],
+    version = 3,
     exportSchema = false
 )
 abstract class BotDatabase : RoomDatabase() {
@@ -129,29 +136,15 @@ abstract class BotDatabase : RoomDatabase() {
     }
 }
 
-class TradeHistoryLocalSource(private val dao: BotDao) {
-    val tradeHistory: Flow<List<ClosedTradeRecord>> =
-        dao.observeTradeHistory().map { list -> list.map { it.toDomain() } }
+class SignalHistoryLocalSource(private val dao: BotDao) {
+    val signalHistory: Flow<List<SignalHistoryRecord>> =
+        dao.observeSignalHistory().map { list -> list.map { it.toDomain() } }
 
-    val equityCurve: Flow<List<EquityPoint>> =
-        dao.observeEquityCurve().map { list -> list.map { it.toDomain() } }
-
-    suspend fun recordClosedTrade(record: ClosedTradeRecord, newEquity: Double) {
-        dao.insertTrade(TradeEntity.fromDomain(record))
-        dao.insertEquitySnapshot(EquitySnapshotEntity(timestamp = record.closedAt, equity = newEquity))
+    suspend fun recordSignalOutcome(record: SignalHistoryRecord) {
+        dao.insertSignalHistory(SignalHistoryEntity.fromDomain(record))
     }
 
-    suspend fun seedInitialEquityIfEmpty(startingEquity: Double) {
-        dao.insertEquitySnapshot(
-            EquitySnapshotEntity(timestamp = System.currentTimeMillis(), equity = startingEquity)
-        )
-    }
-
-    suspend fun resetAll(startingEquity: Double) {
-        dao.clearTradeHistory()
-        dao.clearEquitySnapshots()
-        dao.insertEquitySnapshot(
-            EquitySnapshotEntity(timestamp = System.currentTimeMillis(), equity = startingEquity)
-        )
+    suspend fun clearAll() {
+        dao.clearSignalHistory()
     }
 }

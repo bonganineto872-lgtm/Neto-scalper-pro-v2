@@ -1,6 +1,5 @@
 package com.example.data.remote
 
-import com.example.domain.model.BrokerEnvironment
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -22,9 +21,9 @@ object NetworkModule {
             level = HttpLoggingInterceptor.Level.BASIC
         }
         OkHttpClient.Builder()
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(12, TimeUnit.SECONDS)
-            .writeTimeout(12, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
             .addInterceptor(logging)
             .build()
     }
@@ -38,13 +37,13 @@ object NetworkModule {
             .create(FrankfurterApiService::class.java)
     }
 
-    val goldSpotApi: GoldSpotApiService by lazy {
+    val binanceSpotApi: BinanceSpotApiService by lazy {
         Retrofit.Builder()
             .baseUrl("https://api.binance.com/")
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
-            .create(GoldSpotApiService::class.java)
+            .create(BinanceSpotApiService::class.java)
     }
 
     val mt5MetaApi: Mt5MetaApiService by lazy {
@@ -80,31 +79,6 @@ object NetworkModule {
             service
         } catch (_: Exception) {
             null
-        }
-    }
-
-    private val oandaPracticeApi: OandaApiService by lazy {
-        createOandaService(BrokerEnvironment.OANDA_PRACTICE.baseUrl)
-    }
-
-    private val oandaLiveApi: OandaApiService by lazy {
-        createOandaService(BrokerEnvironment.OANDA_LIVE.baseUrl)
-    }
-
-    private fun createOandaService(baseUrl: String): OandaApiService {
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create(moshi))
-            .build()
-            .create(OandaApiService::class.java)
-    }
-
-    fun getOandaService(environment: BrokerEnvironment): OandaApiService? {
-        return when (environment) {
-            BrokerEnvironment.OANDA_PRACTICE -> oandaPracticeApi
-            BrokerEnvironment.OANDA_LIVE -> oandaLiveApi
-            else -> null
         }
     }
 }

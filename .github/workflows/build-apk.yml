@@ -1,4 +1,4 @@
-name: Build Neto Scalper Pro APK
+name: Build Neto Master APK
 
 on:
   push:
@@ -62,13 +62,13 @@ jobs:
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Prepare APK file for download
-        run: cp app/build/outputs/apk/debug/app-debug.apk NetoScalperPro.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk NetoMaster.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NetoScalperPro-APK
-          path: NetoScalperPro.apk
+          name: NetoMaster-APK
+          path: NetoMaster.apk
           retention-days: 30
 
       - name: Publish direct APK download on Releases
@@ -76,8 +76,8 @@ jobs:
         continue-on-error: true
         with:
           tag_name: latest-apk
-          name: Neto Scalper Pro (Latest APK)
+          name: Neto Master (Latest APK)
           body: |
-            Tap **NetoScalperPro.apk** below to download and install directly on your Android phone.
+            Tap **NetoMaster.apk** below to download and install directly on your Android phone.
             Enable "Install unknown apps" for your browser if Android asks.
-          files: NetoScalperPro.apk
+          files: NetoMaster.apk

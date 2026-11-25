@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Neto Scalper Pro"
+rootProject.name = "Neto Master"
 
 include(":app")

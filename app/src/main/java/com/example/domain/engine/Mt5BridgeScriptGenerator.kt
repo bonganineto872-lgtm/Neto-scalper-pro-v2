@@ -15,9 +15,9 @@ object Mt5BridgeScriptGenerator {
 
         return """
 # ==============================================================================
-# Neto Scalper Pro — Custom MT5 REST Bridge API (neto_mt5_bridge.py)
+# Neto Master — Gold & Bitcoin MT5 Live Signal Bridge (neto_mt5_bridge.py)
 # Broker: $broker | Server: $server | Login: $login
-# Run on Windows PC / Windows VPS alongside MetaTrader 5 terminal:
+# Run alongside MetaTrader 5 terminal:
 #   pip install fastapi uvicorn MetaTrader5 pydantic
 #   python neto_mt5_bridge.py
 # ==============================================================================
@@ -36,7 +36,7 @@ DEFAULT_SERVER = "$server"
 DEFAULT_LOGIN = "$login"
 SYMBOL_SUFFIX = "$suffix"
 
-app = FastAPI(title="Neto Scalper Pro MT5 Bridge", version="1.0.0")
+app = FastAPI(title="Neto Master MT5 Bridge", version="2.0.0")
 
 
 def verify_auth(authorization: Optional[str] = Header(default=None)):
@@ -64,6 +64,10 @@ TIMEFRAME_MAP = {
     "1m": mt5.TIMEFRAME_M1,
     "5m": mt5.TIMEFRAME_M5,
     "15m": mt5.TIMEFRAME_M15,
+    "30m": mt5.TIMEFRAME_M30,
+    "1h": mt5.TIMEFRAME_H1,
+    "4h": mt5.TIMEFRAME_H4,
+    "1d": mt5.TIMEFRAME_D1,
 }
 
 
@@ -72,14 +76,10 @@ class OrderRequest(BaseModel):
     server: str = ""
     symbol: str = "XAUUSD$suffix"
     side: str = "BUY"
-    volume: float = 0.02
+    volume: float = 0.01
     sl: float = 0.0
     tp: float = 0.0
-    comment: str = "Neto Scalper Pro"
-
-
-class CloseRequest(BaseModel):
-    positionId: str
+    comment: str = "Neto Master"
 
 
 @app.get("/mt5/account", dependencies=[Depends(verify_auth)])
@@ -97,64 +97,6 @@ def get_account(login: str = "", server: str = ""):
         "login": int(info.login),
         "type": "ACCOUNT_TRADE_MODE_REAL" if info.trade_mode == mt5.ACCOUNT_TRADE_MODE_REAL else "ACCOUNT_TRADE_MODE_DEMO",
     }
-
-
-@app.get("/mt5/quote", dependencies=[Depends(verify_auth)])
-def get_quote(symbol: str = "XAUUSD$suffix"):
-    ensure_mt5()
-    mt5.symbol_select(symbol, True)
-    tick = mt5.symbol_info_tick(symbol)
-    if tick is None:
-        raise HTTPException(status_code=404, detail=f"Symbol {symbol} tick unavailable")
-    return {
-        "symbol": symbol,
-        "bid": float(tick.bid),
-        "ask": float(tick.ask),
-        "time": datetime.fromtimestamp(tick.time, tz=timezone.utc).isoformat(),
-    }
-
-
-@app.get("/mt5/candles", dependencies=[Depends(verify_auth)])
-def get_candles(symbol: str = "XAUUSD$suffix", timeframe: str = "1m", count: int = 70):
-    ensure_mt5()
-    mt5.symbol_select(symbol, True)
-    tf = TIMEFRAME_MAP.get(timeframe.lower(), mt5.TIMEFRAME_M1)
-    rates = mt5.copy_rates_from_pos(symbol, tf, 0, min(max(count, 20), 200))
-    if rates is None:
-        return []
-    return [
-        {
-            "time": datetime.fromtimestamp(int(r["time"]), tz=timezone.utc).isoformat(),
-            "open": float(r["open"]),
-            "high": float(r["high"]),
-            "low": float(r["low"]),
-            "close": float(r["close"]),
-            "tickVolume": int(r["tick_volume"]),
-        }
-        for r in rates
-    ]
-
-
-@app.get("/mt5/positions", dependencies=[Depends(verify_auth)])
-def get_positions():
-    ensure_mt5()
-    positions = mt5.positions_get() or []
-    return [
-        {
-            "id": str(p.ticket),
-            "symbol": p.symbol,
-            "type": "POSITION_TYPE_BUY" if p.type == mt5.POSITION_TYPE_BUY else "POSITION_TYPE_SELL",
-            "volume": float(p.volume),
-            "openPrice": float(p.price_open),
-            "currentPrice": float(p.price_current),
-            "stopLoss": float(p.sl) if p.sl > 0 else None,
-            "takeProfit": float(p.tp) if p.tp > 0 else None,
-            "profit": float(p.profit),
-            "time": datetime.fromtimestamp(int(p.time), tz=timezone.utc).isoformat(),
-            "comment": p.comment,
-        }
-        for p in positions
-    ]
 
 
 @app.post("/mt5/order", dependencies=[Depends(verify_auth)])
@@ -176,7 +118,7 @@ def place_order(req: OrderRequest):
         "sl": float(req.sl) if req.sl > 0 else 0.0,
         "tp": float(req.tp) if req.tp > 0 else 0.0,
         "deviation": 25,
-        "magic": 202601,
+        "magic": 202602,
         "comment": req.comment[:30],
         "type_time": mt5.ORDER_TIME_GTC,
         "type_filling": mt5.ORDER_FILLING_IOC,
@@ -192,36 +134,6 @@ def place_order(req: OrderRequest):
         "orderId": str(res.order),
         "positionId": str(res.deal),
     }
-
-
-@app.post("/mt5/close", dependencies=[Depends(verify_auth)])
-def close_position(req: CloseRequest):
-    ensure_mt5()
-    ticket = int(req.positionId)
-    matches = mt5.positions_get(ticket=ticket)
-    if not matches:
-        raise HTTPException(status_code=404, detail="Position not found")
-    pos = matches[0]
-    tick = mt5.symbol_info_tick(pos.symbol)
-    is_buy = pos.type == mt5.POSITION_TYPE_BUY
-    close_type = mt5.ORDER_TYPE_SELL if is_buy else mt5.ORDER_TYPE_BUY
-    price = tick.bid if is_buy else tick.ask
-    res = mt5.order_send({
-        "action": mt5.TRADE_ACTION_DEAL,
-        "symbol": pos.symbol,
-        "volume": float(pos.volume),
-        "type": close_type,
-        "position": pos.ticket,
-        "price": float(price),
-        "deviation": 25,
-        "magic": 202601,
-        "comment": "Neto Close",
-        "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
-    })
-    if res is None or res.retcode != mt5.TRADE_RETCODE_DONE:
-        raise HTTPException(status_code=400, detail="Close failed")
-    return {"numericCode": int(res.retcode), "message": "Closed", "orderId": str(res.order)}
 
 
 if __name__ == "__main__":

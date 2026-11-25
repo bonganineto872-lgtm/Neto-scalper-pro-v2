@@ -12,7 +12,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,11 +25,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +41,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -51,24 +50,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.AlertType
 import com.example.domain.model.BotAlertEvent
+import com.example.domain.model.TradeSide
 import com.example.ui.theme.AmberWarn
 import com.example.ui.theme.AmberWarnMuted
-import com.example.ui.theme.BorderSlate
+import com.example.ui.theme.BearRed
+import com.example.ui.theme.BearRedMuted
 import com.example.ui.theme.BullGreen
 import com.example.ui.theme.BullGreenMuted
-import com.example.ui.theme.CarbonSurface
 import com.example.ui.theme.CyberCyan
 import com.example.ui.theme.CyberCyanMuted
-import com.example.ui.theme.ElevatedCard
 import com.example.ui.theme.MonoTextStyle
 import com.example.ui.theme.ObsidianBg
-import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
 
 @Composable
 fun DashboardAlertBanner(
@@ -102,15 +97,22 @@ fun DashboardAlertBanner(
             )
 
             val (accent, bg, icon) = when (alert.type) {
-                AlertType.PYRAMID_LAYER_OPENED -> Triple(
+                AlertType.NEW_SIGNAL -> {
+                    if (alert.side == TradeSide.SELL) {
+                        Triple(BearRed, BearRedMuted.copy(alpha = 0.94f), Icons.AutoMirrored.Filled.TrendingDown)
+                    } else {
+                        Triple(BullGreen, BullGreenMuted.copy(alpha = 0.94f), Icons.AutoMirrored.Filled.TrendingUp)
+                    }
+                }
+                AlertType.TP1_HIT, AlertType.TP2_HIT -> Triple(
                     CyberCyan,
                     CyberCyanMuted.copy(alpha = 0.92f),
-                    Icons.AutoMirrored.Filled.TrendingUp
-                )
-                AlertType.TAKE_PROFIT_HIT -> Triple(
-                    BullGreen,
-                    BullGreenMuted.copy(alpha = 0.92f),
                     Icons.Filled.CheckCircle
+                )
+                AlertType.TP3_HIT -> Triple(
+                    BullGreen,
+                    BullGreenMuted.copy(alpha = 0.95f),
+                    Icons.Filled.Bolt
                 )
                 AlertType.FLIP_TARGET_REACHED -> Triple(
                     AmberWarn,
@@ -164,14 +166,14 @@ fun DashboardAlertBanner(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            alert.profitZar?.let { zar ->
+                            alert.pips?.let { p ->
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = String.format(Locale.US, "+R%,.2f", abs(zar)),
+                                    text = String.format(Locale.US, "+%.1fp", p),
                                     style = MonoTextStyle.copy(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = BullGreen
+                                        color = accent
                                     )
                                 )
                             }
@@ -196,121 +198,6 @@ fun DashboardAlertBanner(
                         contentDescription = "Dismiss alert",
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DashboardAlertsPanel(
-    alerts: List<BotAlertEvent>,
-    onClearAlerts: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(ElevatedCard)
-            .border(1.dp, BorderSlate, RoundedCornerShape(14.dp))
-            .padding(14.dp)
-            .testTag("dashboard_alerts_panel"),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.NotificationsActive,
-                    contentDescription = "Visual Trade Alerts",
-                    tint = AmberWarn,
-                    modifier = Modifier.size(17.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "DASHBOARD VISUAL ALERTS (${alerts.size})",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = TextSecondary
-                )
-            }
-            if (alerts.isNotEmpty()) {
-                Text(
-                    text = "CLEAR",
-                    style = MonoTextStyle.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CyberCyan
-                    ),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onClearAlerts)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                        .testTag("clear_alerts_button")
-                )
-            }
-        }
-
-        if (alerts.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(CarbonSurface)
-                    .border(1.dp, BorderSlate, RoundedCornerShape(10.dp))
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = "Visual alerts trigger automatically whenever the bot scales into a new pyramiding layer (L2–L4) or hits a Take Profit / Flip target.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted
-                )
-            }
-        } else {
-            alerts.take(6).forEach { alert ->
-                val accent = when (alert.type) {
-                    AlertType.PYRAMID_LAYER_OPENED -> CyberCyan
-                    AlertType.TAKE_PROFIT_HIT -> BullGreen
-                    AlertType.FLIP_TARGET_REACHED -> AmberWarn
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(CarbonSurface)
-                        .border(1.dp, accent.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = alert.title,
-                            style = MonoTextStyle.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accent
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = alert.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextPrimary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = fmt.format(Date(alert.timestamp)),
-                        style = MonoTextStyle.copy(fontSize = 10.sp, color = TextMuted)
                     )
                 }
             }

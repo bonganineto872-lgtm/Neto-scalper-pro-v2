@@ -4,52 +4,53 @@ import java.util.Locale
 import kotlin.math.abs
 
 enum class FxPair(
-    val oandaInstrument: String,
+    val binanceSymbol: String,
     val mt5Symbol: String,
     val displayName: String,
+    val shortTitle: String,
     val baseCurrency: String,
     val quoteCurrency: String,
     val pipSize: Double,
     val decimals: Int,
     val defaultMidPrice: Double,
     val typicalSpreadPips: Double,
-    val unitsPerLot: Int = 100_000
+    val unitsPerLot: Int
 ) {
-    XAU_USD("XAU_USD", "XAUUSD", "XAU/USD", "XAU", "USD", 0.10, 2, 2665.50, 2.1, unitsPerLot = 100),
-    EUR_USD("EUR_USD", "EURUSD", "EUR/USD", "EUR", "USD", 0.0001, 5, 1.08450, 0.8),
-    GBP_USD("GBP_USD", "GBPUSD", "GBP/USD", "GBP", "USD", 0.0001, 5, 1.26820, 1.1),
-    USD_JPY("USD_JPY", "USDJPY", "USD/JPY", "USD", "JPY", 0.01, 3, 154.350, 0.9),
-    USD_ZAR("USD_ZAR", "USDZAR", "USD/ZAR", "USD", "ZAR", 0.0001, 5, 18.12000, 1.8),
-    AUD_USD("AUD_USD", "AUDUSD", "AUD/USD", "AUD", "USD", 0.0001, 5, 0.65420, 1.0),
-    USD_CAD("USD_CAD", "USDCAD", "USD/CAD", "USD", "CAD", 0.0001, 5, 1.39650, 1.2),
-    EUR_GBP("EUR_GBP", "EURGBP", "EUR/GBP", "EUR", "GBP", 0.0001, 5, 0.85510, 1.3),
-    EUR_JPY("EUR_JPY", "EURJPY", "EUR/JPY", "EUR", "JPY", 0.01, 3, 167.380, 1.4);
+    XAU_USD(
+        binanceSymbol = "PAXGUSDT",
+        mt5Symbol = "XAUUSD",
+        displayName = "XAU/USD",
+        shortTitle = "GOLD",
+        baseCurrency = "XAU",
+        quoteCurrency = "USD",
+        pipSize = 0.10,
+        decimals = 2,
+        defaultMidPrice = 2665.50,
+        typicalSpreadPips = 2.0,
+        unitsPerLot = 100
+    ),
+    BTC_USD(
+        binanceSymbol = "BTCUSDT",
+        mt5Symbol = "BTCUSD",
+        displayName = "BTC/USD",
+        shortTitle = "BITCOIN",
+        baseCurrency = "BTC",
+        quoteCurrency = "USD",
+        pipSize = 1.0,
+        decimals = 2,
+        defaultMidPrice = 94250.00,
+        typicalSpreadPips = 12.0,
+        unitsPerLot = 1
+    );
 
     fun formatPrice(price: Double): String {
         return String.format(Locale.US, "%.${decimals}f", price)
     }
 
-    /**
-     * Approximate USD value per 1 pip for 1.00 standard lot
-     * (100,000 units for FX; 100 troy oz * $0.10/pip = $10.00/pip for Gold XAU/USD)
-     */
-    fun usdPipValuePerStandardLot(currentMid: Double): Double {
-        return when (quoteCurrency) {
-            "USD" -> 10.0
-            "JPY" -> (0.01 / currentMid.coerceAtLeast(1.0)) * 100_000.0
-            "ZAR" -> (0.0001 / currentMid.coerceAtLeast(1.0)) * 100_000.0
-            "CAD" -> (0.0001 / currentMid.coerceAtLeast(0.5)) * 100_000.0
-            "GBP" -> 12.68
-            else -> 10.0
-        }
-    }
-
-    fun zarPipValuePerStandardLot(currentMid: Double, usdToZarRate: Double): Double {
-        return if (quoteCurrency == "ZAR") {
-            10.0 // 0.0001 * 100,000 = 10 ZAR per pip per standard lot
-        } else {
-            usdPipValuePerStandardLot(currentMid) * usdToZarRate
-        }
+    fun usdValuePerPipPerLot(): Double {
+        // XAU/USD: 1 lot = 100 oz, 1 pip = $0.10 -> $10.00 per pip per 1.00 lot
+        // BTC/USD: 1 lot = 1 BTC, 1 pip = $1.00 -> $1.00 per pip per 1.00 lot
+        return unitsPerLot * pipSize
     }
 
     fun priceDiffToPips(diff: Double): Double = diff / pipSize
@@ -58,93 +59,89 @@ enum class FxPair(
 
 enum class Timeframe(
     val label: String,
-    val oandaGranularity: String,
+    val binanceInterval: String,
     val mt5Timeframe: String,
     val intervalMs: Long
 ) {
-    M1("1m", "M1", "1m", 60_000L),
-    M5("5m", "M5", "5m", 300_000L),
-    M15("15m", "M15", "15m", 900_000L)
+    M1("M1", "1m", "1m", 60_000L),
+    M5("M5", "5m", "5m", 300_000L),
+    M15("M15", "15m", "15m", 900_000L),
+    M30("M30", "30m", "30m", 1_800_000L),
+    H1("H1", "1h", "1h", 3_600_000L),
+    H4("H4", "4h", "4h", 14_400_000L),
+    D1("D1", "1d", "1d", 86_400_000L)
 }
 
-enum class ScalpingStrategyType(
+enum class GoldBtcStrategyType(
     val title: String,
+    val shortName: String,
     val subtitle: String,
     val description: String
 ) {
-    EMA_RSI_MOMENTUM(
-        title = "EMA + RSI Momentum",
-        subtitle = "1m Trend Pyramid Scalp",
-        description = "Opens on fast/slow EMA crossover with RSI confirmation, then scales up to 4 positions as M1 price moves favorably."
+    APEX_CONFLUENCE(
+        title = "Apex Gold & BTC Confluence",
+        shortName = "Apex Confluence",
+        subtitle = "All 6 World-Class Strategies Combined",
+        description = "Scores SMC Liquidity Sweeps, FVG + Order Blocks, EMA 9/21/50 Pullbacks, VWAP Breakouts, BB+ATR Squeeze, and RSI Divergence together for clean-sheet precision entries."
     ),
-    BOLLINGER_MEAN_REVERSION(
-        title = "Bollinger Mean Reversion",
-        subtitle = "1m Band Exhaustion Fade",
-        description = "Fades sharp deviations outside Bollinger Bands (2.0σ) when RSI confirms oversold/overbought extremes."
+    SMC_LIQUIDITY_SNIPER(
+        title = "SMC Liquidity Sweep & OB",
+        shortName = "SMC Sniper",
+        subtitle = "Stop-Hunt + Displacement",
+        description = "Detects institutional stop-hunts below/above swing liquidity followed by rapid order-block displacement for minimal-drawdown sniper entries."
     ),
-    ATR_VOLATILITY_BREAKOUT(
-        title = "ATR Volatility Breakout",
-        subtitle = "1m Range Squeeze Trigger",
-        description = "Captures high-velocity 1-minute breakouts above/below the prior 8-bar range and pyramids with momentum."
+    FVG_ORDER_BLOCK(
+        title = "Fair Value Gap + Order Block",
+        shortName = "FVG + OB",
+        subtitle = "Institutional Imbalance",
+        description = "Captures 3-candle Fair Value Gaps paired with institutional Order Block displacement for high-precision intraday Gold & Bitcoin entries."
+    ),
+    EMA_SNIPER_PULLBACK(
+        title = "EMA 9/21/50 Sniper Pullback",
+        shortName = "EMA Sniper",
+        subtitle = "Trend Pullback Continuation",
+        description = "Enters only when EMA 9 > 21 > 50 (or inverse) and price rejects cleanly off the dynamic EMA21 zone with momentum confirmation."
+    ),
+    VWAP_SESSION_BREAKOUT(
+        title = "Session Open + VWAP Impulse",
+        shortName = "VWAP Impulse",
+        subtitle = "London / NY / Crypto Flow",
+        description = "Captures high-velocity intraday pushes when price reclaims VWAP with strong candle body dominance (>55%) and rising ADX."
+    ),
+    BOLLINGER_ATR_SQUEEZE(
+        title = "Bollinger Squeeze + ATR Surge",
+        shortName = "BB + ATR Squeeze",
+        subtitle = "Volatility Compression Break",
+        description = "Spots tight Bollinger Band compression before explosive Gold & Bitcoin range expansion confirmed by ATR surge."
+    ),
+    RSI_DIVERGENCE_REVERSAL(
+        title = "RSI Divergence + Key Reject",
+        shortName = "RSI Divergence",
+        subtitle = "Exhaustion Snap Reversal",
+        description = "Identifies price vs Wilder RSI divergence at intraday swing extremes and confirms reversal candle close."
     )
 }
 
 enum class SessionFilter(val label: String, val utcHoursRange: IntRange) {
-    ALL_24H("24/5 Continuous", 0..23),
-    LONDON_OPEN("London (07–16 UTC)", 7..16),
+    ALL_24H("24/7 Gold & Crypto", 0..23),
+    LONDON_NY("London + NY (07–21 UTC)", 7..21),
     NY_OVERLAP("LDN/NY Overlap (12–17 UTC)", 12..17),
-    TOKYO_ASIAN("Tokyo (00–08 UTC)", 0..8)
+    ASIAN_TOKYO("Asian Session (00–08 UTC)", 0..8)
 }
 
-enum class BrokerEnvironment(val label: String, val baseUrl: String) {
-    PAPER_SIMULATION("Paper Simulation (R200 Flip)", ""),
-    MT5_DEMO("MT5 Demo (Any Broker / XM Global)", "https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/"),
-    MT5_LIVE("MT5 Live (Any Broker / XM Global)", "https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/"),
-    OANDA_PRACTICE("OANDA Practice API", "https://api-fxpractice.oanda.com/v3/"),
-    OANDA_LIVE("OANDA Live API", "https://api-fxtrade.oanda.com/v3/")
-}
-
-enum class Mt5BridgeType(val label: String, val subtitle: String) {
-    META_API("MetaApi Cloud MT5", "Zero-VPS cloud MT5 REST gateway"),
-    CUSTOM_VPS_BRIDGE("Custom MT5 VPS Bridge", "Direct HTTP REST to your MT5 terminal")
-}
-
-enum class Mt5BrokerPreset(
-    val brokerName: String,
-    val defaultServers: List<String>,
-    val defaultSuffix: String
+enum class ConfirmationSpeed(
+    val label: String,
+    val requiredConfirmTicks: Int,
+    val subtitle: String
 ) {
-    XM_GLOBAL(
-        brokerName = "XM Global",
-        defaultServers = listOf(
-            "XMGlobal-MT5",
-            "XMGlobal-MT5 2",
-            "XMGlobal-MT5 3",
-            "XMGlobal-MT5 4",
-            "XMGlobal-Demo"
-        ),
-        defaultSuffix = ""
-    ),
-    EXNESS(
-        brokerName = "Exness",
-        defaultServers = listOf("Exness-MT5Trial", "Exness-MT5Real", "Exness-MT5Real2"),
-        defaultSuffix = "m"
-    ),
-    DERIV(
-        brokerName = "Deriv",
-        defaultServers = listOf("Deriv-Demo", "Deriv-Server", "Deriv-Server-02"),
-        defaultSuffix = ""
-    ),
-    HFM(
-        brokerName = "HF Markets (HFM)",
-        defaultServers = listOf("HFMarketsSA-Demo", "HFMarketsSA-Live2", "HFMarketsGlobal-Live"),
-        defaultSuffix = ""
-    ),
-    CUSTOM(
-        brokerName = "Any MT5 Broker",
-        defaultServers = listOf("BrokerName-MT5-Live", "BrokerName-MT5-Demo"),
-        defaultSuffix = ""
-    )
+    ULTRA_FAST("Ultra-Fast (2s)", 2, "Confirms after 2 ticks of directional follow-through"),
+    BALANCED("Balanced (4s)", 4, "Confirms after 4 ticks + tight zero-chase check"),
+    STRICT("Strict Sniper (6s)", 6, "Deep confirmation against fakeouts & spread spikes")
+}
+
+enum class BrokerEnvironment(val label: String) {
+    SIGNAL_ENGINE("Live Signal Bot (Zero Paper Trading)"),
+    MT5_LIVE("MT5 Live Bridge (Optional Execution)")
 }
 
 enum class TradeSide {
@@ -158,58 +155,119 @@ enum class TradeDirectionFilter(val label: String, val shortLabel: String) {
     SELL_ONLY("Sell Only", "Short Only")
 }
 
-enum class TradingRiskProfile(
-    val title: String,
-    val subtitle: String,
-    val maxOpenTrades: Int,
-    val scaleInOnProfit: Boolean,
-    val scaleInStepPips: Double,
-    val stopLossPips: Double,
-    val takeProfitPips: Double,
-    val maxSpreadPips: Double,
-    val autoCompoundSizing: Boolean
-) {
-    AGGRESSIVE_1M_FLIP(
-        title = "1m Flip Mode",
-        subtitle = "4x pyramid • +2.5p step • R200→R10k",
-        maxOpenTrades = 4,
-        scaleInOnProfit = true,
-        scaleInStepPips = 2.5,
-        stopLossPips = 6.0,
-        takeProfitPips = 12.0,
-        maxSpreadPips = 3.5,
-        autoCompoundSizing = true
-    ),
-    BALANCED_SCALP(
-        title = "Balanced Scalp",
-        subtitle = "3x pyramid • +4.0p step • 8p/16p",
-        maxOpenTrades = 3,
-        scaleInOnProfit = true,
-        scaleInStepPips = 4.0,
-        stopLossPips = 8.0,
-        takeProfitPips = 16.0,
-        maxSpreadPips = 3.0,
-        autoCompoundSizing = true
-    ),
-    CONSERVATIVE_SNIPER(
-        title = "Sniper Guard",
-        subtitle = "2x max • +5.0p step • Tight spread",
-        maxOpenTrades = 2,
-        scaleInOnProfit = true,
-        scaleInStepPips = 5.0,
-        stopLossPips = 7.0,
-        takeProfitPips = 18.0,
-        maxSpreadPips = 2.2,
-        autoCompoundSizing = false
-    )
+enum class ConfirmationStage(val label: String) {
+    SCANNING("SCANNING"),
+    CONFIRMING("CONFIRMING"),
+    CONFIRMED("CONFIRMED")
 }
 
 enum class BotRunState {
     IDLE,
     SCANNING,
-    IN_POSITION,
-    CIRCUIT_BREAKER_HALTED
+    CONFIRMING,
+    SIGNAL_ACTIVE
 }
+
+enum class SignalStatus(val label: String) {
+    ACTIVE("ACTIVE"),
+    TP1_HIT("TP1 HIT • BE LOCKED"),
+    TP2_HIT("TP2 HIT"),
+    TP3_HIT("TP3 FULL TARGET"),
+    SL_HIT("SL HIT"),
+    CLOSED("CLOSED")
+}
+
+enum class FlipCurrency(val code: String, val symbol: String) {
+    USD("USD", "$"),
+    ZAR("ZAR", "R")
+}
+
+data class TradeSignal(
+    val id: String,
+    val pair: FxPair,
+    val timeframe: Timeframe,
+    val side: TradeSide,
+    val entryPrice: Double,
+    val currentPrice: Double,
+    val stopLoss: Double,
+    val takeProfit1: Double,
+    val takeProfit2: Double,
+    val takeProfit3: Double,
+    val slPips: Double,
+    val tp1Pips: Double,
+    val tp2Pips: Double,
+    val tp3Pips: Double,
+    val confidencePercent: Int,
+    val recommendedLot: Double,
+    val strategyName: String,
+    val alignedStrategies: List<String>,
+    val reason: String,
+    val spreadPips: Double,
+    val rsi: Double?,
+    val confirmationDurationMs: Long,
+    val maxDrawdownPips: Double = 0.0,
+    val breakevenProtected: Boolean = false,
+    val createdAt: Long,
+    val status: SignalStatus = SignalStatus.ACTIVE
+) {
+    val pipsMove: Double
+        get() {
+            val rawDiff = if (side == TradeSide.BUY) currentPrice - entryPrice else entryPrice - currentPrice
+            return pair.priceDiffToPips(rawDiff)
+        }
+
+    val remainingPipsToTp1: Double
+        get() = (tp1Pips - pipsMove).coerceAtLeast(0.0)
+
+    val remainingPipsToTp2: Double
+        get() = (tp2Pips - pipsMove).coerceAtLeast(0.0)
+
+    val remainingPipsToTp3: Double
+        get() = (tp3Pips - pipsMove).coerceAtLeast(0.0)
+
+    val isCleanSheet: Boolean
+        get() = maxDrawdownPips <= pair.typicalSpreadPips * 1.25
+
+    val riskRewardRatio: Double
+        get() = if (slPips > 0.0) tp2Pips / slPips else 2.0
+
+    val isLive: Boolean
+        get() = status == SignalStatus.ACTIVE || status == SignalStatus.TP1_HIT || status == SignalStatus.TP2_HIT
+
+    fun formattedCopyText(): String {
+        val assetLabel = "${pair.shortTitle} (${pair.displayName})"
+        return buildString {
+            appendLine("NETO MASTER • CONFIRMED ${timeframe.label} SIGNAL")
+            appendLine("$assetLabel • ${side.name} • Conf: $confidencePercent%")
+            appendLine("Strategy: $strategyName")
+            appendLine("Entry: ${pair.formatPrice(entryPrice)}")
+            appendLine(String.format(Locale.US, "SL:    %s (-%.1f pips)", pair.formatPrice(stopLoss), slPips))
+            appendLine(String.format(Locale.US, "TP1:   %s (+%.1f pips to target)", pair.formatPrice(takeProfit1), tp1Pips))
+            appendLine(String.format(Locale.US, "TP2:   %s (+%.1f pips to target)", pair.formatPrice(takeProfit2), tp2Pips))
+            appendLine(String.format(Locale.US, "TP3:   %s (+%.1f pips to target)", pair.formatPrice(takeProfit3), tp3Pips))
+            append(String.format(Locale.US, "Flip Lot: %.2fL | Confirmed in %.1fs | %s", recommendedLot, confirmationDurationMs / 1000.0, reason))
+        }
+    }
+}
+
+data class TimeframeSignalRow(
+    val pair: FxPair,
+    val timeframe: Timeframe,
+    val stage: ConfirmationStage,
+    val side: TradeSide?,
+    val entryPrice: Double?,
+    val stopLoss: Double?,
+    val tp1: Double?,
+    val tp2: Double?,
+    val tp3: Double?,
+    val tp1Pips: Double?,
+    val tp2Pips: Double?,
+    val tp3Pips: Double?,
+    val confidencePercent: Int,
+    val strategyTag: String,
+    val confirmationProgress: Float = 0f,
+    val activeSignal: TradeSignal? = null
+)
 
 data class Candle(
     val timestamp: Long,
@@ -217,16 +275,21 @@ data class Candle(
     val high: Double,
     val low: Double,
     val close: Double,
-    val volume: Int = 100
+    val volume: Double = 100.0
 ) {
     val isBullish: Boolean get() = close >= open
+    val bodySize: Double get() = abs(close - open)
+    val totalRange: Double get() = (high - low).coerceAtLeast(1e-9)
+    val bodyRatio: Double get() = bodySize / totalRange
 }
 
 data class BollingerPoint(
     val upper: Double,
     val middle: Double,
     val lower: Double
-)
+) {
+    val bandwidth: Double get() = if (middle > 0.0) (upper - lower) / middle else 0.0
+}
 
 data class MarketQuote(
     val pair: FxPair,
@@ -240,126 +303,89 @@ data class MarketQuote(
 }
 
 data class BotConfig(
-    val strategy: ScalpingStrategyType = ScalpingStrategyType.EMA_RSI_MOMENTUM,
+    val strategy: GoldBtcStrategyType = GoldBtcStrategyType.APEX_CONFLUENCE,
     val directionFilter: TradeDirectionFilter = TradeDirectionFilter.BOTH,
-    val riskProfile: TradingRiskProfile = TradingRiskProfile.AGGRESSIVE_1M_FLIP,
-    val fastEmaPeriod: Int = 9,
-    val slowEmaPeriod: Int = 21,
-    val rsiPeriod: Int = 14,
-    val rsiOversold: Int = 32,
-    val rsiOverbought: Int = 68,
-    val lotSize: Double = 0.02,
-    val autoCompoundSizing: Boolean = true,
-    val stopLossPips: Double = 6.0,
-    val takeProfitPips: Double = 12.0,
-    val maxSpreadPips: Double = 3.5,
-    val maxOpenTrades: Int = 4,
-    val scaleInOnProfit: Boolean = true,
-    val scaleInStepPips: Double = 2.5,
-    val dailyLossLimitZar: Double = 180.0,
-    val trailingStopEnabled: Boolean = true,
-    val trailingTriggerPips: Double = 4.5,
-    val breakevenLockEnabled: Boolean = true,
-    val breakevenTriggerPips: Double = 3.5,
-    val targetProfitStopZar: Double = 10_000.0,
-    val stopOnTargetReached: Boolean = true,
-    val keepRunningOnPhone: Boolean = false,
+    val confirmationSpeed: ConfirmationSpeed = ConfirmationSpeed.ULTRA_FAST,
+    val minConfidencePercent: Int = 82,
+    val maxGoldSpreadPips: Double = 4.5,
+    val maxBtcSpreadPips: Double = 35.0,
+    val riskPercentPerTrade: Double = 5.0,
+    val flipCurrency: FlipCurrency = FlipCurrency.USD,
+    val startingCapital: Double = 50.0,
+    val targetFlipCapital: Double = 2500.0,
+    val autoCompoundFlipLot: Boolean = true,
+    val baseLotSize: Double = 0.01,
+    val breakevenOnTp1: Boolean = true,
+    val keepRunningOnPhone: Boolean = true,
     val sessionFilter: SessionFilter = SessionFilter.ALL_24H,
     val showBollingerBands: Boolean = true,
-    val showEmaLines: Boolean = true
+    val showEmaLines: Boolean = true,
+    val showVwapLine: Boolean = true
 ) {
-    val riskRewardRatio: Double
-        get() = if (stopLossPips > 0.0) takeProfitPips / stopLossPips else 0.0
-
-    fun withRiskProfile(profile: TradingRiskProfile): BotConfig = copy(
-        riskProfile = profile,
-        maxOpenTrades = profile.maxOpenTrades,
-        scaleInOnProfit = profile.scaleInOnProfit,
-        scaleInStepPips = profile.scaleInStepPips,
-        stopLossPips = profile.stopLossPips,
-        takeProfitPips = profile.takeProfitPips,
-        maxSpreadPips = profile.maxSpreadPips,
-        autoCompoundSizing = profile.autoCompoundSizing
-    )
+    fun maxSpreadFor(pair: FxPair): Double = when (pair) {
+        FxPair.XAU_USD -> maxGoldSpreadPips
+        FxPair.BTC_USD -> maxBtcSpreadPips
+    }
 }
 
-data class BrokerCredentials(
-    val environment: BrokerEnvironment = BrokerEnvironment.PAPER_SIMULATION,
-    val apiToken: String = "",
-    val accountId: String = "",
-    val mt5BrokerName: String = "XM Global",
-    val mt5Server: String = "XMGlobal-MT5",
-    val mt5Login: String = "",
-    val mt5BridgeType: Mt5BridgeType = Mt5BridgeType.META_API,
-    val mt5BridgeUrl: String = "",
-    val mt5SymbolSuffix: String = "",
-    val localApiEnabled: Boolean = true,
-    val localApiPort: Int = 8787,
-    val localApiKey: String = ""
-) {
-    val isOandaConfigured: Boolean
-        get() = (environment == BrokerEnvironment.OANDA_PRACTICE || environment == BrokerEnvironment.OANDA_LIVE) &&
-            apiToken.isNotBlank() &&
-            accountId.isNotBlank()
-
-    val isMt5Selected: Boolean
-        get() = environment == BrokerEnvironment.MT5_DEMO || environment == BrokerEnvironment.MT5_LIVE
-
-    val isMt5Configured: Boolean
-        get() = isMt5Selected && when (mt5BridgeType) {
-            Mt5BridgeType.META_API -> apiToken.isNotBlank() && accountId.isNotBlank()
-            Mt5BridgeType.CUSTOM_VPS_BRIDGE -> mt5BridgeUrl.isNotBlank()
-        }
-}
-
-data class TradePosition(
-    val id: String,
-    val pair: FxPair,
-    val side: TradeSide,
-    val lotSize: Double,
-    val entryPrice: Double,
-    val currentPrice: Double,
-    val stopLoss: Double,
-    val takeProfit: Double,
-    val trailingStopPrice: Double? = null,
-    val openedAt: Long,
-    val strategyName: String,
-    val pyramidLayer: Int = 1,
+data class AccountFlipPlan(
+    val currency: FlipCurrency = FlipCurrency.USD,
+    val startingCapital: Double = 50.0,
+    val projectedCapital: Double = 50.0,
+    val targetCapital: Double = 2500.0,
     val usdToZarRate: Double = 18.12,
-    val isLiveBroker: Boolean = false,
-    val brokerTradeId: String? = null
+    val nextRecommendedLotGold: Double = 0.01,
+    val nextRecommendedLotBtc: Double = 0.01,
+    val estimatedStepsRemaining: Int = 12,
+    val cleanSheetWinRate: Double = 0.0,
+    val totalConfirmedSignals: Int = 0,
+    val tpHitsCount: Int = 0,
+    val zeroDrawdownCount: Int = 0,
+    val netPipsCaptured: Double = 0.0,
+    val spotFeedSource: String = "Connecting Live Feed...",
+    val lastSyncTime: Long? = null
 ) {
-    val pipsPnl: Double
+    val progressFraction: Float
         get() {
-            val rawDiff = if (side == TradeSide.BUY) currentPrice - entryPrice else entryPrice - currentPrice
-            return pair.priceDiffToPips(rawDiff)
+            val span = (targetCapital - startingCapital).coerceAtLeast(1.0)
+            return ((projectedCapital - startingCapital) / span).toFloat().coerceIn(0f, 1f)
         }
 
-    val unrealizedPnlAccount: Double
-        get() = if (isLiveBroker) {
-            pipsPnl * lotSize * pair.usdPipValuePerStandardLot(currentPrice)
+    val multiplier: Double
+        get() = if (startingCapital > 0.0) (projectedCapital / startingCapital).coerceAtLeast(1.0) else 1.0
+
+    fun formatMoney(amount: Double, signed: Boolean = false): String {
+        return if (signed) {
+            val prefix = if (amount >= 0) "+" else "-"
+            String.format(Locale.US, "%s%s%,.2f", prefix, currency.symbol, abs(amount))
         } else {
-            pipsPnl * lotSize * pair.zarPipValuePerStandardLot(currentPrice, usdToZarRate)
+            String.format(Locale.US, "%s%,.2f", currency.symbol, amount)
         }
-
-    val effectiveStopLoss: Double
-        get() = trailingStopPrice ?: stopLoss
+    }
 }
 
-data class ClosedTradeRecord(
+data class SignalHistoryRecord(
     val id: Long = 0,
+    val signalId: String,
     val pair: FxPair,
+    val timeframe: Timeframe,
     val side: TradeSide,
-    val lotSize: Double,
     val entryPrice: Double,
     val exitPrice: Double,
-    val pipsPnl: Double,
-    val realizedPnlZar: Double,
+    val stopLoss: Double,
+    val tp1: Double,
+    val tp2: Double,
+    val tp3: Double,
+    val tp1Pips: Double,
+    val tp2Pips: Double,
+    val tp3Pips: Double,
+    val capturedPips: Double,
+    val maxDrawdownPips: Double,
+    val confidencePercent: Int,
     val strategyName: String,
-    val closeReason: String,
-    val openedAt: Long,
-    val closedAt: Long,
-    val environmentLabel: String
+    val outcome: SignalStatus,
+    val createdAt: Long,
+    val closedAt: Long
 )
 
 data class SignalLogEntry(
@@ -372,54 +398,17 @@ data class SignalLogEntry(
     val price: Double,
     val spreadPips: Double,
     val rsi: Double?,
-    val isExecution: Boolean,
+    val isConfirmedSignal: Boolean,
     val side: TradeSide? = null
 )
-
-data class EquityPoint(
-    val timestamp: Long,
-    val equity: Double
-)
-
-data class AccountSummary(
-    val balance: Double = 200.0,
-    val equity: Double = 200.0,
-    val startingBalance: Double = 200.0,
-    val targetFlipBalance: Double = 10_000.0,
-    val unrealizedPnl: Double = 0.0,
-    val realizedTodayPnl: Double = 0.0,
-    val currency: String = "ZAR",
-    val usdToZarRate: Double = 18.12,
-    val marginUsed: Double = 0.0,
-    val freeMargin: Double = 200.0,
-    val brokerStatusText: String = "Paper Flip Engine (R200 → R10,000)",
-    val lastSpotSyncTime: Long? = null,
-    val spotFeedSource: String = "Connecting..."
-) {
-    val flipProgressFraction: Float
-        get() {
-            val span = (targetFlipBalance - startingBalance).coerceAtLeast(1.0)
-            return ((equity - startingBalance) / span).toFloat().coerceIn(0f, 1f)
-        }
-
-    val flipMultiplier: Double
-        get() = if (startingBalance > 0.0) (equity / startingBalance).coerceAtLeast(0.0) else 1.0
-
-    fun formatMoney(amount: Double, signed: Boolean = false): String {
-        val symbol = if (currency == "ZAR") "R" else "$"
-        return if (signed) {
-            val prefix = if (amount >= 0) "+" else "-"
-            String.format(Locale.US, "%s%s%,.2f", prefix, symbol, abs(amount))
-        } else {
-            String.format(Locale.US, "%s%,.2f", symbol, amount)
-        }
-    }
-}
 
 data class IndicatorSummary(
     val fastEma: Double? = null,
     val slowEma: Double? = null,
+    val trendEma50: Double? = null,
+    val vwap: Double? = null,
     val rsi: Double? = null,
+    val adx: Double? = null,
     val bbUpper: Double? = null,
     val bbMiddle: Double? = null,
     val bbLower: Double? = null,
@@ -428,8 +417,10 @@ data class IndicatorSummary(
 )
 
 enum class AlertType {
-    PYRAMID_LAYER_OPENED,
-    TAKE_PROFIT_HIT,
+    NEW_SIGNAL,
+    TP1_HIT,
+    TP2_HIT,
+    TP3_HIT,
     FLIP_TARGET_REACHED
 }
 
@@ -439,7 +430,44 @@ data class BotAlertEvent(
     val title: String,
     val message: String,
     val pair: FxPair,
+    val timeframe: Timeframe,
     val timestamp: Long,
-    val profitZar: Double? = null,
-    val layer: Int? = null
+    val pips: Double? = null,
+    val side: TradeSide? = null
 )
+
+enum class Mt5BridgeType(val label: String, val subtitle: String) {
+    META_API("MetaApi Cloud", "Cloud REST token"),
+    CUSTOM_VPS("Self-Hosted VPS API", "Your own Python MT5 bridge")
+}
+
+data class BrokerCredentials(
+    val environment: BrokerEnvironment = BrokerEnvironment.SIGNAL_ENGINE,
+    val apiToken: String = "",
+    val accountId: String = "",
+    val mt5BrokerName: String = "XM Global",
+    val mt5Server: String = "XMGlobal-MT5",
+    val mt5Login: String = "",
+    val mt5BridgeType: Mt5BridgeType = Mt5BridgeType.META_API,
+    val mt5BridgeUrl: String = "",
+    val mt5SymbolSuffix: String = "",
+    val localApiEnabled: Boolean = true,
+    val localApiPort: Int = 8787,
+    val localApiKey: String = ""
+) {
+    val isMt5Configured: Boolean
+        get() = environment == BrokerEnvironment.MT5_LIVE &&
+            ((mt5BridgeType == Mt5BridgeType.META_API && apiToken.isNotBlank() && accountId.isNotBlank()) ||
+                (mt5BridgeType == Mt5BridgeType.CUSTOM_VPS && mt5BridgeUrl.isNotBlank() && apiToken.isNotBlank()))
+}
+
+enum class Mt5BrokerPreset(
+    val brokerName: String,
+    val defaultServers: List<String>,
+    val defaultSuffix: String
+) {
+    XM_GLOBAL("XM Global", listOf("XMGlobal-MT5", "XMGlobal-MT5 2", "XMGlobal-MT5 3"), ""),
+    EXNESS("Exness", listOf("Exness-MT5Real", "Exness-MT5Real2"), "m"),
+    DERIV("Deriv", listOf("Deriv-Server", "Deriv-Server-02"), ""),
+    HFM("HFM", listOf("HFMarketsSA-Live2", "HFMarkets-Live"), "")
+}
